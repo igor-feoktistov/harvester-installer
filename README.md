@@ -1,6 +1,4 @@
----
-page_title: "harvester-installer patch" adapted to `cloud-init` `nocloud`"
----
+# harvester-installer patch
 
 The patch adapts `harvester-installer` to work with `cloud-init` `nocloud`
 configurations for automatic Harvester installation in Live ISO scenario.
