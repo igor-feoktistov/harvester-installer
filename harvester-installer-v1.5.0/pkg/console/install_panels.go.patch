@@ -1,0 +1,66 @@
+--- install_panels.go.ORIG	2025-04-29 14:04:43.000000000 -0700
++++ install_panels.go	2025-04-29 14:11:26.000000000 -0700
+@@ -55,6 +55,7 @@
+ 		DefaultRoute: true,
+ 	}
+ 	alreadyInstalled  bool
++	cloudConfigExist  bool
+ 	installModeOnly   bool
+ 	diskConfirmed     bool
+ 	preflightWarnings []string
+@@ -119,6 +120,20 @@
+ 			logrus.Errorf("automatic install failed: %v\n", err)
+ 		}
+ 
++		// if cloud-config submitted via cloud-init nocloud, make it non-interactive
++		cloudConfigExist, err = config.IsCloudConfig()
++		if err == nil {
++			if cloudConfigExist {
++				if err = mergeCloudConfig(c.config); err == nil {
++					initPanel = installPanel
++				} else {
++					logrus.Errorf("error merging cloud-config: %v\n", err)
++				}
++			}
++		} else {
++			logrus.Errorf("error in checking cloud-init config: %v\n", err)
++		}
++
+ 		// add SchemeVersion in non-automatic mode
+ 		// in automatic mode, SchemeVersion should be from config.yaml directly
+ 		if !c.config.Install.Automatic {
+@@ -2401,6 +2416,15 @@
+ 				}
+ 			}
+ 
++			// if cloud-config submitted via cloud-init nocloud, we bypass interactive mode
++			if cloudConfigExist {
++				printToPanel(c.Gui, "Configuring network...", installPanel)
++				if output, err := applyNetworks(c.config.ManagementInterface, c.config.Hostname); err != nil {
++					printToPanel(c.Gui, fmt.Sprintf("Can't apply networks: %s\n%s", err, string(output)), installPanel)
++					return
++				}
++			}
++
+ 			if needToGetVIPFromDHCP(c.config.VipMode, c.config.Vip, c.config.VipHwAddr) {
+ 				vip, err := getVipThroughDHCP(getManagementInterfaceName(c.config.ManagementInterface), "")
+ 				if err != nil {
+@@ -3017,3 +3041,18 @@
+ 
+ 	return nil
+ }
++
++func mergeCloudConfig(c *config.HarvesterConfig) error {
++	cloudConfig, err := config.ReadCloudConfig()
++	if err != nil {
++		return err
++	}
++	c.Merge(cloudConfig)
++	if cloudConfig.OS.Hostname != "" {
++		c.OS.Hostname = cloudConfig.OS.Hostname
++	}
++	if cloudConfig.OS.Password != "" {
++		c.OS.Password = cloudConfig.OS.Password
++	}
++	return nil
++}
